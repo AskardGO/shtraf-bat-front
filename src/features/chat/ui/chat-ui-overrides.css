@@ -1,0 +1,28 @@
+.ChatApp {
+    background: transparent !important;
+}
+
+.dv-MessageContainer {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    height: 100%;
+    overflow-y: auto;
+}
+
+.PullToRefresh-inner {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    min-height: 100%;
+    align-self: flex-end;
+}
+
+.MessageList {
+    display: flex;
+    flex-direction: column-reverse;
+}
+
+.Message {
+    margin-top: 0.2rem !important;
+}
