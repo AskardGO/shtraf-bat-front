@@ -1,80 +1,102 @@
-import { useEffect, useState, useRef } from "react";
-import Chat, {Bubble, MessageProps} from "@chatui/core";
+import { useCallback, useEffect, useState } from 'react';
+import Chat, { MessageProps } from "@chatui/core";
 import '@chatui/core/dist/index.css';
-import { useChatStore } from "features/chat/model/useChatStore.ts";
-import { Message as MsgType } from "entities/chat/model/type.ts";
-import "features/chat/ui/chat-ui-overrides.css"
+import { useChatStoreSubscription } from "../hooks/useChatStore";
+import { useMessageManager } from "../hooks/useMessageManager";
+import { useScrollManager } from "../hooks/useScrollManager";
+import { MessageRenderer } from "../components/MessageRenderer";
+import "features/chat/ui/chat-ui-overrides.css";
 
 interface ChatUIWindowProps {
     userId: string;
 }
 
 export const ChatWindow = ({ userId }: ChatUIWindowProps) => {
-    const { activeChatId, messages, subscribeMessages, sendMessage, loadMoreMessages } = useChatStore();
-    const [currentMessages, setCurrentMessages] = useState<MsgType[]>([]);
-    const chatContainerRef = useRef<HTMLDivElement>(null);
+    const storeState = useChatStoreSubscription();
+    const { activeChatId, messages, messagesPagination, sendMessage, lastUpdate, loadMoreMessages, forceRender } = storeState;
+
+    const { currentMessages, interactiveMessages } = useMessageManager({
+        activeChatId,
+        messages,
+        lastUpdate,
+        forceRender
+    });
+
+    const { scrollToBottom } = useScrollManager({
+        activeChatId,
+        loadMoreMessages,
+        messagesPagination
+    });
+
+    const [animateMessages, setAnimateMessages] = useState(false);
 
     useEffect(() => {
-        if (activeChatId) subscribeMessages(activeChatId);
-    }, [activeChatId]);
-
-    useEffect(() => {
-        if (activeChatId && messages[activeChatId]) {
-            setCurrentMessages(messages[activeChatId]);
+        if (activeChatId) {
+            setAnimateMessages(false);
+            scrollToBottom(() => {
+                setAnimateMessages(true);
+            });
         }
-    }, [messages, activeChatId]);
+    }, [activeChatId, scrollToBottom]);
 
-    useEffect(() => {
-        const container = chatContainerRef.current;
-        if (!container) return;
-
-        const handleScroll = () => {
-            if (container.scrollTop === 0 && currentMessages.length > 0) {
-                loadMoreMessages(activeChatId!);
-            }
-        };
-
-        container.addEventListener("scroll", handleScroll);
-        return () => container.removeEventListener("scroll", handleScroll);
-    }, [activeChatId, currentMessages.length, loadMoreMessages]);
-
-    const handleSend = async (type: string, val: string) => {
+    const handleSend = useCallback(async (type: string, val: string) => {
         if (!activeChatId || type !== "text" || !val.trim()) return;
-        await sendMessage(activeChatId, userId, val.trim());
-    };
+        await sendMessage(activeChatId, val.trim());
+    }, [activeChatId, sendMessage]);
+
+    const transformedMessages = useCallback((): MessageProps[] => {
+        return currentMessages
+            .map((msg, index, arr) => {
+                const showName = index === 0 || (arr[index - 1] && arr[index - 1].senderId !== msg.senderId);
+                const position = msg.senderId === userId ? 'right' : 'left';
+                const status = (msg as any).isPending ? 'pending' : (msg as any).isFailed ? 'failed' : (msg as any).isSent ? 'sent' : 'delivered';
+                
+                return {
+                    _id: msg.id,
+                    type: "text" as const,
+                    content: msg.text,
+                    user: {
+                        id: msg.senderId,
+                        ...(showName && { name: msg.senderId === userId ? "Вы" : "Собеседник" }),
+                    },
+                    position: position as 'right' | 'left',
+                    status: status as 'pending' | 'failed' | 'sent' | 'delivered',
+                } as MessageProps;
+            })
+            .reverse();
+    }, [currentMessages, userId]);
+
+    const renderMessageContent = useCallback((msg: any) => {
+        return (
+            <MessageRenderer
+                msg={msg}
+                currentMessages={currentMessages}
+                activeChatId={activeChatId}
+                interactiveMessages={interactiveMessages}
+                userId={userId}
+            />
+        );
+    }, [currentMessages, activeChatId, interactiveMessages, userId]);
 
     return (
         <div style={{ height: '100%', width: '100%' }}>
             <Chat
-                ref={chatContainerRef}
                 navbar={{ title: "Чат" }}
                 placeholder="Введите сообщение..."
-                messages={currentMessages
-                    .map((msg, index, arr) => {
-                        const showName = index === 0 || (arr[index - 1] && arr[index - 1].senderId !== msg.senderId);
-                        return {
-                            _id: msg.id,
-                            type: "text",
-                            content: msg.text,
-                            user: {
-                                id: msg.senderId,
-                                ...(showName && { name: msg.senderId === userId ? "Вы" : "Собеседник" }),
-                            },
-                            position: msg.senderId === userId ? 'right' : 'left',
-                        };
-                    })
-                    .reverse() as MessageProps[]
-                }
+                messages={transformedMessages()}
                 onSend={handleSend}
-                renderMessageContent={(msg) => (
-                    <Bubble
-                        content={msg.content}
-                    />
-                )}
-                loadMoreText={"Загрузить еще сообщения"}
+                renderMessageContent={renderMessageContent}
                 locale={"Отправить"}
                 colorScheme={"dark"}
             />
+            <style dangerouslySetInnerHTML={{
+                __html: `
+                    .MessageList {
+                        opacity: ${animateMessages ? 1 : 0};
+                        transition: opacity 0.3s ease-out;
+                    }
+                `
+            }} />
         </div>
     );
 };

@@ -1,18 +1,14 @@
 import { useCallback } from "react";
-import { signOut } from "firebase/auth";
-import { firebaseService } from "app/firebase";
-import { useAuthStore } from "features/auth";
+import { useAuthStore } from "shared/stores/authStore";
 
 export const useLogout = () => {
-    const setUser = useAuthStore((state) => state.setUser);
+    const { logout } = useAuthStore();
 
     return useCallback(async () => {
         try {
-            await signOut(firebaseService.auth);
-            setUser(null);
+            await logout();
         } catch (error) {
             console.error("Logout error:", error);
         }
-    }, [setUser]);
-
+    }, [logout]);
 };

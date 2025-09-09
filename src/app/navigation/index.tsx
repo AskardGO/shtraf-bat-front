@@ -3,7 +3,7 @@ import {
     Navigate,
     RouterProvider,
 } from "react-router-dom";
-import {RouteGuard} from "app/navigation/ProtectedRoute.tsx";
+import { ProtectedRoute } from "shared/ui/ProtectedRoute";
 
 //pages
 import {AuthPage} from "features/auth";
@@ -13,21 +13,26 @@ const router = createBrowserRouter([
     {
         path: "/",
         element: (
-            <RouteGuard requireAuth>
+            <ProtectedRoute>
                 <MainPage />
-            </RouteGuard>
+            </ProtectedRoute>
         ),
     },
     {
         path: "/auth",
-        element: (
-            <RouteGuard>
-                <AuthPage />
-            </RouteGuard>
-        ),
+        element: <AuthPage />,
     },
-    { path: "*", element: <Navigate to="/auth" replace /> },
-]);
+    { path: "*", element: <Navigate to="/" replace /> },
+], {
+    future: {
+        v7_startTransition: true,
+        v7_relativeSplatPath: true,
+        v7_fetcherPersist: true,
+        v7_normalizeFormMethod: true,
+        v7_partialHydration: true,
+        v7_skipActionErrorRevalidation: true,
+    }
+});
 
 
 export const AppRouter = () => {

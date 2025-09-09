@@ -1,4 +1,4 @@
-import { FC } from "react";
+import { FC, useEffect, useState } from "react";
 import {
     Avatar,
     Badge,
@@ -12,7 +12,9 @@ import { format } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
 import { Chat } from "entities/chat/model/type";
 import { Colors } from "shared/ui";
-import {useChatStore} from "features/chat/model/useChatStore.ts";
+import { useChatStore } from "features/chat/model/useChatStore.ts";
+import { useUserStore } from "shared/stores/userStore";
+import { useAuthStore } from "shared/stores/authStore";
 
 interface ChatItemProps {
     chat: Chat;
@@ -21,8 +23,47 @@ interface ChatItemProps {
 }
 
 export const ChatItem: FC<ChatItemProps> = ({ chat, onSelect, isMinimized = false }) => {
+    const { activeChatId, messages } = useChatStore();
+    const { user: currentUser } = useAuthStore();
+    const { getUserById, loadUser } = useUserStore();
+    const [displayName, setDisplayName] = useState<string>('');
 
-    const {activeChatId} = useChatStore();
+    // Get last message from store messages
+    const chatMessages = messages[chat.id] || [];
+    const lastMessage = chatMessages.length > 0 ? chatMessages[chatMessages.length - 1] : null;
+
+    // Helper function to safely format date
+    const formatMessageTime = (createdAt: Date | string | undefined) => {
+        if (!createdAt) return "";
+        const date = new Date(createdAt);
+        return !isNaN(date.getTime()) ? format(date, "HH:mm") : "";
+    };
+
+    // Get the other participant's ID (not current user)
+    const otherParticipantId = chat.participants.find(id => id !== currentUser?.uid);
+
+    useEffect(() => {
+        if (!otherParticipantId) {
+            setDisplayName(chat.id); // Fallback to chat ID
+            return;
+        }
+
+        // Check if we already have user data
+        const cachedUser = getUserById(otherParticipantId);
+        if (cachedUser) {
+            setDisplayName(cachedUser.displayedName || cachedUser.login);
+            return;
+        }
+
+        // Load user data if not cached
+        loadUser(otherParticipantId).then(user => {
+            if (user) {
+                setDisplayName(user.displayedName || user.login);
+            } else {
+                setDisplayName(otherParticipantId); // Fallback to ID
+            }
+        });
+    }, [otherParticipantId, getUserById, loadUser, chat.id]);
 
     return (
         <ListItemButton
@@ -68,16 +109,16 @@ export const ChatItem: FC<ChatItemProps> = ({ chat, onSelect, isMinimized = fals
                             primary={
                                 <Box display="flex" justifyContent="space-between" alignItems="center">
                                     <Typography variant="body1" fontWeight="bold">
-                                        {chat.participants[1]}
+                                        {displayName}
                                     </Typography>
                                     <Typography variant="caption" color={Colors.LIGHT_GRAY}>
-                                        {format(new Date(chat.lastMessage.createdAt), "HH:mm")}
+                                        {formatMessageTime(lastMessage?.createdAt)}
                                     </Typography>
                                 </Box>
                             }
                             secondary={
                                 <Typography variant="body2" color={Colors.LIGHT_GRAY} noWrap>
-                                    {chat.lastMessage.text}
+                                    {lastMessage ? lastMessage.text : "No messages yet"}
                                 </Typography>
                             }
                         />
